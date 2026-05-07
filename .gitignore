@@ -1,0 +1,77 @@
+# Agents
+.agents/
+
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+conda-env/
+
+# --- Jupyter Notebook ---
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# --- Deep Learning / ML ---
+# Datasets (Usually too large for Git)
+data/
+datasets/
+raw_data/
+processed_data/
+
+# Model Weights & Checkpoints
+models/*.h5
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.pb
+checkpoints/
+weights/
+*.ckpt
+
+# Training Logs
+runs/
+logs/
+.tensorboard/
+wandb/
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Antigravity Kit ---
+# We keep the configuration (.md files) but ignore potential large temp files
+.agents/scratch/
+.agents/recordings/
