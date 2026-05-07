@@ -1,5 +1,8 @@
 # Agents
 .agents/
+data/
+.dvc/
+.dvcignore
 
 
 # --- Python ---
