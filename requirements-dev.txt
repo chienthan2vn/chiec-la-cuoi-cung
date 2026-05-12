@@ -1,0 +1,5 @@
+# Các thư viện phục vụ riêng cho việc Testing (CI / Local)
+-r requirements.txt
+pytest
+httpx
+pytest-cov
