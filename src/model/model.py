@@ -1,17 +1,22 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms, models
 import os
 import time
+from tqdm import tqdm
+import mlflow
+import mlflow.pytorch
+import hydra
+from omegaconf import DictConfig, OmegaConf
+from sklearn.metrics import precision_recall_fscore_support
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # --- CONFIGURATION ---
-DATA_DIR = "data/raw/PlantDoc-Dataset"
-BATCH_SIZE = 32
-NUM_EPOCHS = 10
-LEARNING_RATE = 0.001
-IMAGE_SIZE = 224
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SEED = 42
 
@@ -21,8 +26,7 @@ def set_seed(seed: int):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-def get_dataloaders(data_dir: str, batch_size: int, image_size: int):
-    # Augmentation cho tập train, chỉ normalize cho tập test
+def get_dataloaders(data_dir: str, batch_size: int, image_size: int, max_samples: int = 1000):
     data_transforms = {
         'train': transforms.Compose([
             transforms.RandomResizedCrop(image_size),
@@ -41,36 +45,31 @@ def get_dataloaders(data_dir: str, batch_size: int, image_size: int):
     image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms[x])
                       for x in ['train', 'test']}
     
-    dataloaders = {x: DataLoader(image_datasets[x], batch_size=batch_size,
-                                 shuffle=True, num_workers=4)
+    subset_datasets = {}
+    for x in ['train', 'test']:
+        full_ds = image_datasets[x]
+        num_samples = min(len(full_ds), max_samples)
+        indices = torch.randperm(len(full_ds))[:num_samples]
+        subset_datasets[x] = Subset(full_ds, indices)
+    
+    dataloaders = {x: DataLoader(subset_datasets[x], batch_size=batch_size,
+                                 shuffle=True, num_workers=0)
                    for x in ['train', 'test']}
     
-    dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'test']}
+    dataset_sizes = {x: len(subset_datasets[x]) for x in ['train', 'test']}
     class_names = image_datasets['train'].classes
     
     return dataloaders, dataset_sizes, class_names
 
 def build_model(num_classes: int):
-    # Load ResNet50 pre-trained
-    model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-    
-    # Freeze initial layers (optional, but good for Phase 0 R&D)
-    # for param in model.parameters():
-    #     param.requires_grad = False
-    
-    # Thay đổi lớp cuối cùng cho phù hợp với số lượng lớp của PlantDoc
+    model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
     num_ftrs = model.fc.in_features
     model.fc = nn.Linear(num_ftrs, num_classes)
-    
     return model.to(DEVICE)
 
-def train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epochs=10):
-    since = time.time()
-
+def train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epochs=5):
+    best_acc = 0.0
     for epoch in range(num_epochs):
-        print(f'Epoch {epoch}/{num_epochs - 1}')
-        print('-' * 10)
-
         for phase in ['train', 'test']:
             if phase == 'train':
                 model.train()
@@ -79,11 +78,11 @@ def train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epo
 
             running_loss = 0.0
             running_corrects = 0
+            all_preds = []
+            all_labels = []
 
-            for inputs, labels in dataloaders[phase]:
-                inputs = inputs.to(DEVICE)
-                labels = labels.to(DEVICE)
-
+            for inputs, labels in tqdm(dataloaders[phase], desc=f"{phase} Epoch {epoch}", leave=False):
+                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
                 optimizer.zero_grad()
 
                 with torch.set_grad_enabled(phase == 'train'):
@@ -97,37 +96,83 @@ def train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epo
 
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
+                all_preds.extend(preds.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
 
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
+            precision, recall, f1, _ = precision_recall_fscore_support(
+                all_labels, all_preds, average='weighted', zero_division=0
+            )
 
-            print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+            # Log to MLflow
+            mlflow.log_metric(f"{phase}_loss", epoch_loss, step=epoch)
+            mlflow.log_metric(f"{phase}_acc", float(epoch_acc), step=epoch)
+            mlflow.log_metric(f"{phase}_precision", float(precision), step=epoch)
+            mlflow.log_metric(f"{phase}_recall", float(recall), step=epoch)
+            mlflow.log_metric(f"{phase}_f1", float(f1), step=epoch)
 
-        print()
+            if phase == 'test' and epoch_acc > best_acc:
+                best_acc = epoch_acc
+                # Log model weights and register it to MLflow Model Registry
+                mlflow.pytorch.log_model(
+                    model, 
+                    "model",
+                    registered_model_name=os.getenv("MLFLOW_MODEL_NAME")
+                )
 
-    time_elapsed = time.time() - since
-    print(f'Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
-    
-    # Lưu weights sau khi train
-    torch.save(model.state_dict(), 'resnet50_plantdoc_phase0.pth')
-    print("Model saved as resnet50_plantdoc_phase0.pth")
+    return float(best_acc)
 
-if __name__ == "__main__":
+@hydra.main(version_base=None, config_path="../../configs", config_name="config")
+def main(cfg: DictConfig):
     set_seed(SEED)
     
-    print(f"Using device: {DEVICE}")
-    
     # 1. Load Data
-    dataloaders, dataset_sizes, class_names = get_dataloaders(DATA_DIR, BATCH_SIZE, IMAGE_SIZE)
-    print(f"Classes: {class_names}")
-    print(f"Train size: {dataset_sizes['train']}, Test size: {dataset_sizes['test']}")
+    data_dir = os.path.join(hydra.utils.get_original_cwd(), "data/raw/PlantDoc-Dataset")
+    dataloaders, dataset_sizes, class_names = get_dataloaders(
+        data_dir, 
+        cfg.train.batch_size, 
+        cfg.train.image_size, 
+        max_samples=cfg.train.max_samples
+    )
+
+    # 2. MLflow Experiment Setup
+    if os.getenv("MLFLOW_TRACKING_URI"):
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    mlflow.set_experiment(cfg.experiment_name)
     
-    # 2. Build Model
-    model = build_model(len(class_names))
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    run_name = f"trial_{cfg.optimizer.lr:.4f}_{cfg.train.max_samples}_{timestamp}"
     
-    # 3. Define Loss and Optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    
-    # 4. Train
-    train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epochs=NUM_EPOCHS)
+    # We use a single run, Hydra Multirun will create multiple runs
+    with mlflow.start_run(run_name=run_name):
+        # Log config as params
+        params = OmegaConf.to_container(cfg, resolve=True)
+        # Flatten params for mlflow if needed, but nested is okay for some UI
+        mlflow.log_params(params["train"])
+        mlflow.log_params(params["optimizer"])
+        mlflow.log_params(params["model"])
+
+        # 3. Build & Train
+        model = build_model(len(class_names))
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(model.parameters(), lr=cfg.optimizer.lr)
+        
+        accuracy = train_model(
+            model, 
+            dataloaders, 
+            dataset_sizes, 
+            criterion, 
+            optimizer, 
+            num_epochs=cfg.train.num_epochs
+        )
+        
+        print(f"Final Test Accuracy: {accuracy}")
+        
+        # 4. Log Hydra logs as artifacts
+        # mlflow.log_artifacts(".")
+            
+        return accuracy
+
+if __name__ == "__main__":
+    main()

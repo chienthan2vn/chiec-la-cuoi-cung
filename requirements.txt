@@ -1,0 +1,29 @@
+# Core ML
+torch
+torchvision
+numpy
+
+# Experiment Tracking & Optimization (Phase 1)
+mlflow
+optuna
+hydra-core
+hydra-optuna-sweeper
+python-dotenv
+
+# API & Serving (Phase 4)
+fastapi
+uvicorn
+pydantic
+python-dotenv
+python-multipart
+
+# Data & Storage (Phase 2)
+# boto3
+# dvc[s3]
+pandas
+
+# Visualization & Utils
+# matplotlib
+scikit-learn
+opencv-python-headless
+tqdm

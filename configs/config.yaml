@@ -1,0 +1,32 @@
+# configs/config.yaml
+defaults:
+  - _self_
+  - model: resnet18
+  - train: default
+  - optimizer: adam
+  - override hydra/sweeper: optuna
+
+experiment_name: ${oc.env:MLFLOW_EXPERIMENT_NAME}
+run_name: "baseline-hydra-optuna"
+
+# Hydra Global Configuration
+hydra:
+  # 1. Tối ưu hóa thư mục lưu trữ Log của Hydra
+  run:
+    dir: logs/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: logs/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+
+  # 2. Cấu hình Optuna Sweeper
+  sweeper:
+    sampler:
+      _target_: optuna.samplers.TPESampler
+      seed: 42
+    direction: maximize
+    study_name: plant_disease_classification
+    n_trials: 5
+    n_jobs: 1
+    params:
+      optimizer.lr: interval(1e-5, 1e-2)
+      train.max_samples: choice(${train.max_samples_choices})

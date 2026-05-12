@@ -1,0 +1,64 @@
+services:
+  # Database
+  db:
+    image: postgres:15
+    container_name: mlflow_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${MLFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${MLFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${MLFLOW_DB_NAME}
+    volumes:
+      - mlflow_db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # MLflow Tracking Server (Production Ready)
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: mlflow_server
+    restart: always
+    hostname: mlflow # Đặt hostname cố định để MLflow nhận diện chính mình
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      # Cấu hình để MLflow cho phép các Host header từ các service khác
+      - MLFLOW_TRACKING_ALLOW_CROSS_ORIGIN_REQUESTS=true
+      - MLFLOW_HTTP_SERVER_ALLOW_ALL_HOSTS=true
+    command: >
+      mlflow server 
+      --backend-store-uri postgresql://${MLFLOW_DB_USER}:${MLFLOW_DB_PASSWORD}@db:5432/${MLFLOW_DB_NAME} 
+      --default-artifact-root mlflow-artifacts:/ 
+      --artifacts-destination /mlflow_artifacts 
+      --host 0.0.0.0 
+      --port 5000 
+      --serve-artifacts 
+      --allowed-hosts *
+    volumes:
+      - ./logs/mlflow_artifacts:/mlflow_artifacts
+
+  # Plant Disease API Service
+  api:
+    build:
+      context: .
+      dockerfile: src/Dockerfile
+    image: plant-disease-api:latest
+    container_name: plant_disease_api
+    restart: always
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    env_file:
+      - .env
+    environment:
+      # Sau này nếu MLflow ở server khác, bạn chỉ cần đổi biến này trong .env
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_MODEL_NAME=${MLFLOW_MODEL_NAME}
+    depends_on:
+      - mlflow
+
+volumes:
+  mlflow_db_data:

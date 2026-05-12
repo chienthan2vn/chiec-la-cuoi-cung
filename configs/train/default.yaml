@@ -1,0 +1,5 @@
+batch_size: 32
+num_epochs: 1
+image_size: 224
+max_samples: 100
+max_samples_choices: 100,200,500

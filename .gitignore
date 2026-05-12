@@ -3,6 +3,8 @@
 data/
 .dvc/
 .dvcignore
+logs/
+.env
 
 
 # --- Python ---
@@ -78,3 +80,13 @@ Thumbs.db
 # We keep the configuration (.md files) but ignore potential large temp files
 .agents/scratch/
 .agents/recordings/
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- MLflow ---
+mlflow.db
+mlruns/
+mlartifacts/

@@ -3,7 +3,7 @@
 **Tên dự án:** Hệ thống Nhận diện Bệnh trên Lá cây (Plant Disease Classification)
 **Stack Công nghệ:** PyTorch, FastAPI, Airflow, MLflow, MinIO, Docker, GitHub Actions, Google Cloud.
 **Stack track and dardboard**: MLflow, Grafana, Prometheus, DVC, promtail
-**Stack train**: PyTorch, Optuna, Hydra, Kaggle GPU, MinIO
+**Stack train**: PyTorch, Optuna, Hydra, MinIO
 **Stack demo**: Streamlit
 
 
@@ -33,14 +33,8 @@ plant-disease-mlops/
 │   │   └── schemas.py                 # Pydantic models (Validate Input/Output)
 │   │
 │   ├── model/                         # ---> CORE: THƯ VIỆN DÙNG CHUNG
-│   │   ├── model.py                   # Cấu trúc mạng Downstream Classification
+│   │   ├── model.py                   # Cấu trúc mạng Downstream Classification resnet18
 │   │   └── inference_handler.py       # Xử lý kết nối MinIO, kéo file .pth vào RAM
-│   │
-│   ├── train_kaggle/                  # ---> JOB: TRAINING (Đẩy lên Kaggle thực thi)
-│   │   ├── train.py                   # Code huấn luyện tích hợp Optuna, Hydra và MLflow Tracking
-│   │   ├── dataset.py                 # Logic xử lý hình ảnh và Augmentations
-│   │   ├── config.yaml                # Cấu hình huấn luyện
-│   │   └── requirements_kaggle.txt    # Thư viện tính toán nặng: torch-gpu, optuna, kaggle
 │   │
 │   └── Dockerfile                     # [!] Bản thiết kế Image cho API (Nằm gọn trong src)
 │
@@ -71,10 +65,10 @@ plant-disease-mlops/
 *   **Hành động R&D:** Viết code thuần bằng PyTorch. Tập trung xử lý kiến trúc mô hình, viết data loader. In log loss ra console để xác nhận model hội tụ.
 *   **Hành động GitHub:** Commit code thường xuyên với thông điệp rõ ràng (ví dụ: `feat: add initial architecture`). Điều này giúp bạn dễ dàng rollback nếu hướng R&D đi vào ngõ cụt.
 
-### Phase 1: Thêm "Mắt thần" (Tích hợp MLflow & Optuna local)
+### Phase 1: Thêm "Mắt thần" (Tích hợp MLflow, Hydra & Optuna local)
 *   **Mục tiêu:** Theo dõi các experiment, tối ưu tham số tự động và quản lý tính năng mới qua Git Branches.
 *   **Khởi tạo Tech stack:** Chạy lệnh `mlflow server` local.
-*   **Hành động MLOps:** Import thư viện `mlflow` và bọc hàm train bằng `optuna` để tự dò tham số cốt lõi. Tránh nhúng tham số fine-tune thủ công vào code.
+*   **Hành động MLOps:** Import thư viện `mlflow` và bọc hàm train bằng `hydra` và `optuna` để tự dò tham số cốt lõi. Tránh nhúng tham số fine-tune thủ công vào code.
 *   **Hành động GitHub:** Tạo một nhánh mới (ví dụ: `git checkout -b feature/experiment-tracking`). Sau khi code chạy ổn định và log được lên MLflow UI, đẩy nhánh này lên GitHub và thực hiện Merge vào nhánh `main`.
 
 ### Phase 2: Phân tách Code & Data (MinIO, DVC & GitHub)
