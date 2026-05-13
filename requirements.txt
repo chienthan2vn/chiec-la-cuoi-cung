@@ -18,8 +18,8 @@ python-dotenv
 python-multipart
 
 # Data & Storage (Phase 2)
-# boto3
-# dvc[s3]
+boto3
+dvc[s3]
 pandas
 
 # Visualization & Utils

@@ -1,9 +1,10 @@
 # Agents
 .agents/
-data/
-.dvc/
-.dvcignore
+data/*
+!data/**/*.dvc
+!data/**/.gitignore
 logs/
+temp/
 .env
 
 
@@ -45,7 +46,7 @@ conda-env/
 
 # --- Deep Learning / ML ---
 # Datasets (Usually too large for Git)
-data/
+data/*
 datasets/
 raw_data/
 processed_data/
