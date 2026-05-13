@@ -1,0 +1,6 @@
+outs:
+- md5: 2064d837d541b60b1c07be074147d30c.dir
+  size: 937479012
+  nfiles: 2552
+  hash: md5
+  path: PlantDoc-Dataset
